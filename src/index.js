@@ -172,6 +172,16 @@ function ensureStringArray(value, name) {
   return value.map((item) => item.trim());
 }
 
+function ensureInteger(value, name, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (!Number.isInteger(value)) {
+    throw new Error(`${name} must be an integer.`);
+  }
+  if (value < min || value > max) {
+    throw new Error(`${name} must be between ${min} and ${max}.`);
+  }
+  return value;
+}
+
 function readBomAsBase64(bomPath) {
   const resolved = path.resolve(bomPath);
   const bytes = fs.readFileSync(resolved);
@@ -188,8 +198,26 @@ const tools = [
         name: { type: "string", description: "Optional project name filter." },
         excludeInactive: { type: "boolean", description: "Exclude inactive projects." },
         onlyRoot: { type: "boolean", description: "Return only root projects." },
-        notAssignedToTeamWithUuid: { type: "string", description: "Exclude projects assigned to the given team UUID." }
+        notAssignedToTeamWithUuid: { type: "string", description: "Exclude projects assigned to the given team UUID." },
+        offset: { type: "integer", description: "Optional zero-based client-side offset into the returned project list." },
+        limit: { type: "integer", description: "Optional client-side limit for the number of returned projects." }
       },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "search_projects_by_name",
+    description: "Search projects by exact or partial name, with optional client-side paging.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Project name or substring to search for." },
+        excludeInactive: { type: "boolean", description: "Exclude inactive projects." },
+        onlyRoot: { type: "boolean", description: "Return only root projects." },
+        limit: { type: "integer", description: "Optional client-side limit for the number of returned projects." },
+        offset: { type: "integer", description: "Optional zero-based client-side offset into the filtered result set." }
+      },
+      required: ["query"],
       additionalProperties: false
     }
   },
@@ -291,6 +319,8 @@ const tools = [
 async function callTool(name, args) {
   switch (name) {
     case "list_projects": {
+      const offset = args.offset === undefined ? 0 : ensureInteger(args.offset, "offset", { min: 0 });
+      const limit = args.limit === undefined ? null : ensureInteger(args.limit, "limit", { min: 1 });
       const response = await dependencyTrackRequest({
         endpoint: "/v1/project",
         query: {
@@ -300,9 +330,56 @@ async function callTool(name, args) {
           notAssignedToTeamWithUuid: args.notAssignedToTeamWithUuid
         }
       });
+
+      const projects = Array.isArray(response.body) ? response.body : [];
+      const pagedProjects = limit === null ? projects.slice(offset) : projects.slice(offset, offset + limit);
       return {
+        offset,
+        limit,
         totalCount: Number(response.headers["x-total-count"] || response.headers["total-count"] || 0),
-        projects: response.body
+        returnedCount: pagedProjects.length,
+        projects: pagedProjects
+      };
+    }
+
+    case "search_projects_by_name": {
+      const query = ensureString(args.query, "query");
+      const offset = args.offset === undefined ? 0 : ensureInteger(args.offset, "offset", { min: 0 });
+      const limit = args.limit === undefined ? 25 : ensureInteger(args.limit, "limit", { min: 1 });
+      const response = await dependencyTrackRequest({
+        endpoint: "/v1/project",
+        query: {
+          name: query,
+          excludeInactive: args.excludeInactive,
+          onlyRoot: args.onlyRoot
+        }
+      });
+
+      const projects = Array.isArray(response.body) ? response.body : [];
+      const normalizedQuery = query.toLowerCase();
+      const exactMatches = [];
+      const partialMatches = [];
+
+      for (const project of projects) {
+        const projectName = typeof project.name === "string" ? project.name : "";
+        const lowerName = projectName.toLowerCase();
+        if (lowerName === normalizedQuery) {
+          exactMatches.push(project);
+        } else if (lowerName.includes(normalizedQuery)) {
+          partialMatches.push(project);
+        }
+      }
+
+      const matches = exactMatches.concat(partialMatches);
+      const pagedProjects = matches.slice(offset, offset + limit);
+
+      return {
+        query,
+        offset,
+        limit,
+        totalMatches: matches.length,
+        returnedCount: pagedProjects.length,
+        projects: pagedProjects
       };
     }
 

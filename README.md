@@ -24,6 +24,7 @@ Official references:
 ## Features
 
 - `list_projects`
+- `search_projects_by_name`
 - `get_project`
 - `lookup_project`
 - `get_latest_project`
@@ -89,6 +90,12 @@ The server only wraps official Dependency-Track endpoints. Actual access still d
 - findings and analysis: `VIEW_VULNERABILITY`
 - BOM upload: `BOM_UPLOAD`
 - auto-create during BOM upload: `PORTFOLIO_MANAGEMENT` or `PROJECT_CREATION_UPLOAD`
+
+## Query behavior
+
+- `list_projects` now supports optional client-side `offset` and `limit` parameters.
+- `search_projects_by_name` is intended for normal interactive use and defaults to returning up to 25 matches.
+- Both tools still use the official `GET /api/v1/project` endpoint underneath.
 
 ## License
 
