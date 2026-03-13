@@ -1,0 +1,23 @@
+{
+  "name": "dependency-track-mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for OWASP Dependency-Track",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "bin": {
+    "dependency-track-mcp-server": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node --check src/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "dependency-track",
+    "owasp",
+    "sbom",
+    "cyclonedx"
+  ],
+  "author": "Daniel Brenner",
+  "license": "MIT"
+}
